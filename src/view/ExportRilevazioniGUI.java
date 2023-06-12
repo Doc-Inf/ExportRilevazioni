@@ -8,6 +8,10 @@ import java.awt.Toolkit;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.KeyEvent;
+import java.io.BufferedReader;
+import java.io.FileReader;
+import java.io.IOException;
+import java.nio.file.Paths;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -16,6 +20,7 @@ import java.util.concurrent.TimeUnit;
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
+import javax.swing.JFileChooser;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
@@ -47,6 +52,8 @@ public class ExportRilevazioniGUI extends JFrame implements ActionListener{
 	private static final int TEXT_FIELD_LENGTH = 5;
 	private static final int LOG_AREA_WIDTH = (FRAME_WIDTH/2);
 	private static final int LOG_AREA_HEIGHT = 550;
+	private static final String CONFIG_DIR = "config";
+	private static final String FILE_MAPPATURA_CLICK = "mappa_click.txt"; 
 	private JPanel mainPanel;
 	private SpringLayout layout;
 	private JLabel posizioneCorrenteCursoreLabel;
@@ -76,6 +83,10 @@ public class ExportRilevazioniGUI extends JFrame implements ActionListener{
 	private JLabel intervalloTemporaleLabel;
 	private Integer[] intervalliTemporaliArray = {1, 5, 10, 15, 30, 60 };
 	private JComboBox<Integer> intervalloTemporaleComboBox;
+	private JButton pathFileMappatureButton;
+	private JFileChooser pathFileMappatureChooser;
+	private JButton loadMappatureButton;
+	private String fileMappature = "./" + CONFIG_DIR + "/" + FILE_MAPPATURA_CLICK;
 	private JButton startRoutineButton;
 	private JButton stopRoutineButton;
 	private JTextArea textArea;
@@ -165,6 +176,12 @@ public class ExportRilevazioniGUI extends JFrame implements ActionListener{
 		intervalloTemporaleLabel = new JLabel("Scegli intervallo: ");
 		intervalloTemporaleComboBox = new JComboBox<>(intervalliTemporaliArray);
 		intervalloTemporaleComboBox.setToolTipText("Scegli l'intervallo temporale in minuti con cui ripetere la routine dei click");
+		pathFileMappatureButton = new JButton("File Mappature");
+		pathFileMappatureButton.addActionListener(this);
+		pathFileMappatureChooser = new JFileChooser("./" + CONFIG_DIR );
+		loadMappatureButton = new JButton("Carica Mappature");
+		loadMappatureButton.addActionListener(this);
+		
 		startRoutineButton = new JButton("Start Routine");
 		startRoutineButton.addActionListener(this);
 		stopRoutineButton = new JButton("Stop Routine");
@@ -187,8 +204,7 @@ public class ExportRilevazioniGUI extends JFrame implements ActionListener{
 		mainPanel.add(yClickCursoreTextField);	
 		mainPanel.add(delayLabel);
 		mainPanel.add(delayTextField);
-		mainPanel.add(addButton);
-		mainPanel.add(clearButton);
+		mainPanel.add(addButton);		
 		mainPanel.add(startButton);
 		
 		mainPanel.add(keyPressLabel);
@@ -203,6 +219,9 @@ public class ExportRilevazioniGUI extends JFrame implements ActionListener{
 		mainPanel.add(intervalloTemporaleLabel);
 		mainPanel.add(intervalloTemporaleComboBox);
 		mainPanel.add(startRoutineButton);
+		mainPanel.add(clearButton);
+		mainPanel.add(pathFileMappatureButton);
+		mainPanel.add(loadMappatureButton);
 		mainPanel.add(logArea);
 		
 		AppLogger.setLogArea(textArea);
@@ -272,6 +291,10 @@ public class ExportRilevazioniGUI extends JFrame implements ActionListener{
 		layout.putConstraint(SpringLayout.WEST, stopRoutineButton, MARGIN_XXSMALL, SpringLayout.EAST, startRoutineButton);
 		layout.putConstraint(SpringLayout.NORTH, clearButton, MARGIN_MEDIUM, SpringLayout.SOUTH, intervalloTemporaleLabel);
 		layout.putConstraint(SpringLayout.WEST, clearButton, MARGIN_MEDIUM, SpringLayout.WEST, mainPanel);
+		layout.putConstraint(SpringLayout.NORTH, pathFileMappatureButton, MARGIN_MEDIUM, SpringLayout.SOUTH, intervalloTemporaleLabel);
+		layout.putConstraint(SpringLayout.WEST, pathFileMappatureButton, MARGIN_XSMALL, SpringLayout.EAST, clearButton);
+		layout.putConstraint(SpringLayout.NORTH, loadMappatureButton, MARGIN_MEDIUM, SpringLayout.SOUTH, intervalloTemporaleLabel);
+		layout.putConstraint(SpringLayout.WEST, loadMappatureButton, MARGIN_XXSMALL, SpringLayout.EAST, pathFileMappatureButton);
 		
 		//Log Area
 		layout.putConstraint(SpringLayout.NORTH, logArea, MARGIN_MEDIUM, SpringLayout.NORTH, mainPanel);
@@ -346,6 +369,49 @@ public class ExportRilevazioniGUI extends JFrame implements ActionListener{
 				log("I valori per X e Y inseriti non sono validi, dati immessi: X = " + xs + "   Y = " + ys);
 			}
 			
+		}		
+		if(e.getSource()==pathFileMappatureButton) {
+			int result = pathFileMappatureChooser.showOpenDialog(this);
+			switch(result) {
+				case JFileChooser.CANCEL_OPTION:{
+					log("Scelta del file delle misurazioni, operazione annullata dall'utente");
+					break;
+				}
+				case JFileChooser.APPROVE_OPTION:{
+					fileMappature = pathFileMappatureChooser.getSelectedFile().toPath().toString();
+					log("File rilevazioni corrente: " + fileMappature);
+					break;
+				}
+				case JFileChooser.ERROR_OPTION:{
+					log("Errore in fase di scelta del file delle misurazioni ");
+					break;
+				}
+			}
+		}	
+		if(e.getSource()==loadMappatureButton) {
+			try {
+				log("Caricamento mappature azioni dal file: " + Paths.get(fileMappature).toString());
+				BufferedReader in = new BufferedReader(new FileReader(Paths.get(fileMappature).toString() ));
+				String line = null;
+				while( (line = in.readLine()) != null) {
+					String[] mappature = line.split(";");
+					switch(mappature[0]) {
+					case "MOUSE_CLICK":{
+						MouseControllerBot.add(new PressioneMouse(new Point(Integer.parseInt(mappature[1]),Integer.parseInt(mappature[2])),Integer.parseInt(mappature[3])));
+						log("Add click del mouse - X: " + Integer.parseInt(mappature[1]) + "\tY: " + Integer.parseInt(mappature[2]) + "\tDelay: " + Integer.parseInt(mappature[3]));
+						break;
+					}
+					case "KEY_PRESSED":{
+						MouseControllerBot.add( new PressioneTasto(getKey(mappature[1]),Integer.parseInt(mappature[2]) ) );	
+						log("Add key press - Key: " + mappature[1] + "\tDelay: " + Integer.parseInt(mappature[2]));
+						break;
+					}
+					}
+				}
+				log("Caricamento da file di azioni completato");
+			} catch (IOException e1) {
+				e1.printStackTrace();
+			}
 		}
 		if(e.getSource()==startRoutineButton) {
 			
@@ -369,6 +435,7 @@ public class ExportRilevazioniGUI extends JFrame implements ActionListener{
 			}).start();
 			
 		}
+		
 		
 		
 	}
